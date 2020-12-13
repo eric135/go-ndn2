@@ -22,12 +22,12 @@ func TestBlockCreateAndEncode(t *testing.T) {
 	assert.False(t, block.HasWire())
 	encoded, err := block.Wire()
 	assert.NoError(t, err)
-	assert.Equal(t, 6, block.WireSize())
+	assert.Equal(t, 6, block.Size())
 	assert.ElementsMatch(t, []byte{0x28, 0x04, 0x01, 0x02, 0x03, 0x04}, encoded)
 	assert.True(t, block.HasWire())
 	encoded, err = block.Wire()
 	assert.NoError(t, err)
-	assert.Equal(t, 6, block.WireSize())
+	assert.Equal(t, 6, block.Size())
 	assert.ElementsMatch(t, []byte{0x28, 0x04, 0x01, 0x02, 0x03, 0x04}, encoded)
 	assert.True(t, block.HasWire())
 
@@ -38,11 +38,11 @@ func TestBlockCreateAndEncode(t *testing.T) {
 	assert.False(t, block.HasWire())
 	encoded, err = block.Wire()
 	assert.NoError(t, err)
-	assert.Equal(t, 2, block.WireSize())
+	assert.Equal(t, 2, block.Size())
 	assert.ElementsMatch(t, []byte{0x28, 0x00}, encoded)
 
 	assert.True(t, block.HasWire())
-	block.ResetWire()
+	block.Reset()
 	assert.False(t, block.HasWire())
 }
 
@@ -53,12 +53,12 @@ func TestBlockDecode(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0x28), block.Type())
 	assert.True(t, block.HasWire())
-	assert.Equal(t, 6, block.WireSize())
+	assert.Equal(t, 6, block.Size())
 	assert.ElementsMatch(t, []byte{0x01, 0x02, 0x03, 0x04}, block.Value())
 	encoded, err := block.Wire()
 	assert.NoError(t, err)
 	assert.True(t, block.HasWire())
-	assert.Equal(t, 6, block.WireSize())
+	assert.Equal(t, 6, block.Size())
 	assert.ElementsMatch(t, []byte{0x28, 0x04, 0x01, 0x02, 0x03, 0x04}, encoded)
 }
 
@@ -266,4 +266,20 @@ func TestBlockDecodeSubelements(t *testing.T) {
 	assert.Equal(t, []byte{0x02}, block.Subelements()[1].Value())
 	assert.Equal(t, uint32(0xDD), block.Subelements()[2].Type())
 	assert.Equal(t, []byte{0xEE, 0x01, 0x03}, block.Subelements()[2].Value())
+}
+
+func TestBlockDeepCopy(t *testing.T) {
+	block := tlv.NewEmptyBlock(0xCC)
+	assert.NotNil(t, block)
+	block.Append(tlv.NewEmptyBlock(0xAA))
+	block.Append(tlv.NewEmptyBlock(0xBB))
+	encodedBlock, _ := block.Wire()
+
+	copyBlock := block.DeepCopy()
+	assert.NotNil(t, copyBlock)
+	encodedCopyBlock, _ := copyBlock.Wire()
+	assert.NotSame(t, &block, &copyBlock)
+	assert.NotSame(t, &(block.Subelements()[0]), &(copyBlock.Subelements()[0]))
+	assert.NotSame(t, &(block.Subelements()[1]), &(copyBlock.Subelements()[1]))
+	assert.NotSame(t, encodedBlock, encodedCopyBlock)
 }

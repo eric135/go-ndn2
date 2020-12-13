@@ -9,12 +9,9 @@ package tlv
 
 import "errors"
 
-// TLV errors
+// TLV errors.
 var (
 	ErrBufferTooShort = errors.New("TLV length exceeds buffer size")
 	ErrMissingLength  = errors.New("Missing TLV length")
-	ErrOutOfRange     = errors.New("Value outside of allowed range")
-	ErrTooLong        = errors.New("Value too long")
-	ErrTooShort       = errors.New("Value too short")
 	ErrUnrecognized   = errors.New("Unrecognized TLV type")
 )

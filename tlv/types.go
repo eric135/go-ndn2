@@ -13,11 +13,17 @@ const (
 	Interest = 0x05
 	Data     = 0x06
 
-	// Common fields
+	// Name and components
 	Name                            = 0x07
-	GenericNameComponent            = 0x08
 	ImplicitSha256DigestComponent   = 0x01
 	ParametersSha256DigestComponent = 0x02
+	GenericNameComponent            = 0x08
+	KeywordNameComponent            = 0x20
+	SegmentNameComponent            = 0x21
+	ByteOffsetNameComponent         = 0x22
+	VersionNameComponent            = 0x23
+	TimestampNameComponent          = 0x24
+	SequenceNumNameComponent        = 0x25
 
 	// Interest packets
 	CanBePrefix            = 0x21

@@ -10,6 +10,8 @@ package tlv
 import (
 	"bytes"
 	"math"
+
+	"github.com/eric135/go-ndn2/util"
 )
 
 // Block contains an encoded block.
@@ -17,7 +19,7 @@ type Block struct {
 	// Contents
 	tlvType     uint32
 	value       []byte
-	subelements []Block
+	subelements []*Block
 
 	// Encoding
 	wire    []byte
@@ -59,7 +61,7 @@ func (b *Block) Value() []byte {
 }
 
 // Subelements returns the sub-elements of the block.
-func (b *Block) Subelements() []Block {
+func (b *Block) Subelements() []*Block {
 	return b.subelements
 }
 
@@ -78,7 +80,8 @@ func (b *Block) SetType(tlvType uint32) {
 // SetValue sets the value of the block.
 func (b *Block) SetValue(value []byte) {
 	if !bytes.Equal(b.value, value) {
-		b.value = value
+		b.value = make([]byte, len(value))
+		copy(b.value, value)
 		b.hasWire = false
 	}
 }
@@ -89,16 +92,31 @@ func (b *Block) SetValue(value []byte) {
 
 // Append appends a subelement onto the end of the block's value.
 func (b *Block) Append(block *Block) {
-	b.subelements = append(b.subelements, *block)
+	b.subelements = append(b.subelements, block.DeepCopy())
 	b.hasWire = false
 }
 
 // Clear erases all subelements of the block.
 func (b *Block) Clear() {
 	if len(b.subelements) > 0 {
-		b.subelements = []Block{}
+		b.subelements = []*Block{}
 		b.hasWire = false
 	}
+}
+
+// DeepCopy creates a deep copy of the block.
+func (b *Block) DeepCopy() *Block {
+	copyB := *b
+	copyB.value = make([]byte, len(b.value))
+	copy(copyB.value, b.value)
+	copyB.subelements = make([]*Block, 0, len(b.subelements))
+	for _, subelem := range b.subelements {
+		copyB.subelements = append(copyB.subelements, subelem.DeepCopy())
+	}
+	// Reset wire
+	copyB.wire = make([]byte, 0)
+	copyB.hasWire = false
+	return &copyB
 }
 
 // Encode encodes all subelements into the block's value.
@@ -113,7 +131,7 @@ func (b *Block) Encode() error {
 		b.value = append(b.value, elemWire...)
 	}
 
-	b.subelements = []Block{}
+	b.subelements = []*Block{}
 	return nil
 }
 
@@ -155,20 +173,21 @@ func (b *Block) EraseAll(tlvType uint32) int {
 func (b *Block) Find(tlvType uint32) *Block {
 	for _, elem := range b.subelements {
 		if elem.Type() == tlvType {
-			return &elem
+			return elem
 		}
 	}
 	return nil
 }
 
 // Insert inserts the subelement in order of ascending TLV type, after any subelements of the same TLV type. Note that this assumes subelements are ordered by increasing TLV type.
-func (b *Block) Insert(block *Block) {
+func (b *Block) Insert(in *Block) {
+	block := in.DeepCopy()
 	if len(b.subelements) == 0 {
-		b.subelements = []Block{*block}
+		b.subelements = []*Block{block}
 	} else if b.subelements[0].Type() > block.Type() {
-		b.subelements = append([]Block{*block}, b.subelements...)
+		b.subelements = append([]*Block{block}, b.subelements...)
 	} else if b.subelements[len(b.subelements)-1].Type() <= block.Type() {
-		b.subelements = append(b.subelements, *block)
+		b.subelements = append(b.subelements, block)
 	} else {
 		precedingElem := 0
 		for i, elem := range b.subelements {
@@ -177,7 +196,7 @@ func (b *Block) Insert(block *Block) {
 				break
 			}
 		}
-		b.subelements = append(b.subelements[:precedingElem+1], append([]Block{*block}, b.subelements[precedingElem+1:]...)...)
+		b.subelements = append(b.subelements[:precedingElem+1], append([]*Block{block}, b.subelements[precedingElem+1:]...)...)
 	}
 
 	b.hasWire = false
@@ -186,13 +205,13 @@ func (b *Block) Insert(block *Block) {
 // Parse parses the block value into subelements, if possible.
 func (b *Block) Parse() bool {
 	startPos := uint64(0)
-	b.subelements = []Block{}
+	b.subelements = []*Block{}
 	for startPos < uint64(len(b.value)) {
 		block, blockLen, err := DecodeBlock(b.value[startPos:])
 		if err != nil {
 			return false
 		}
-		b.subelements = append(b.subelements, *block)
+		b.subelements = append(b.subelements, block)
 		startPos += blockLen
 	}
 	b.value = []byte{}
@@ -254,15 +273,17 @@ func (b *Block) HasWire() bool {
 	return b.hasWire
 }
 
-// WireSize returns the size of the wire.
-func (b *Block) WireSize() int {
+// Size returns the size of the wire.
+func (b *Block) Size() int {
 	return len(b.wire)
 }
 
-// ResetWire clears the encoded wire buffer of the block.
-func (b *Block) ResetWire() {
+// Reset clears the encoded wire buffer, value, and subelements of the block.
+func (b *Block) Reset() {
 	b.hasWire = false
 	b.wire = []byte{}
+	b.value = []byte{}
+	b.subelements = []*Block{}
 }
 
 // DecodeBlock decodes a block from the wire.
@@ -275,7 +296,7 @@ func DecodeBlock(wire []byte) (*Block, uint64, error) {
 		return nil, 0, err
 	}
 	if tlvType > math.MaxUint32 {
-		return nil, 0, ErrOutOfRange
+		return nil, 0, util.ErrOutOfRange
 	}
 	b.tlvType = uint32(tlvType)
 

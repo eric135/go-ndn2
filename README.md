@@ -14,7 +14,7 @@ It is designed with forwarders in mind (particularly [YaNFD](https://github.com/
 * Data (**planned**)
 * Interest (**planned**)
 * Link Object (**planned**)
-* Names (**planned**)
+* Names
 * Signatures (**planned**)
   * Data signatures (**planned**)
   * Signed Interests (**planned**)

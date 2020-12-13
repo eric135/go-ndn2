@@ -9,6 +9,8 @@ package tlv
 
 import (
 	"encoding/binary"
+
+	"github.com/eric135/go-ndn2/util"
 )
 
 // EncodeVarNum encodes a non-negative integer value for encoding.
@@ -37,32 +39,32 @@ func EncodeVarNum(in uint64) []byte {
 // DecodeVarNum decodes a non-negative integer value from a wire value.
 func DecodeVarNum(in []byte) (uint64, int, error) {
 	if len(in) < 1 {
-		return 0, 0, ErrTooShort
+		return 0, 0, util.ErrTooShort
 	}
 
 	if in[0] <= 0xFC {
 		return uint64(in[0]), 1, nil
 	} else if in[0] == 0xFD {
 		if len(in) < 3 {
-			return 0, 0, ErrTooShort
+			return 0, 0, util.ErrTooShort
 		}
 		return uint64(binary.BigEndian.Uint16(in[1:3])), 3, nil
 	} else if in[0] == 0xFE {
 		if len(in) < 5 {
-			return 0, 0, ErrTooShort
+			return 0, 0, util.ErrTooShort
 		}
 		return uint64(binary.BigEndian.Uint32(in[1:5])), 5, nil
 	} else { // Must be 0xFF
 		if len(in) < 9 {
-			return 0, 0, ErrTooShort
+			return 0, 0, util.ErrTooShort
 		}
 		return binary.BigEndian.Uint64(in[1:9]), 9, nil
 	}
 }
 
 // EncodeNNIBlock encodes a non-negative integer value in a block of the specified type.
-func EncodeNNIBlock(t uint32, v uint64) Block {
-	var b Block
+func EncodeNNIBlock(t uint32, v uint64) *Block {
+	b := new(Block)
 	b.SetType(t)
 	value := make([]byte, 8)
 	binary.BigEndian.PutUint64(value, v)
