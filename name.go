@@ -546,6 +546,43 @@ func (n *Name) Clear() {
 	}
 }
 
+// Compare returns the canonical order of this name against the the specified other name.
+func (n *Name) Compare(other *Name) int {
+	if n.Equals(other) {
+		return 0
+	} else if n.PrefixOf(other) {
+		return -1
+	} else if other.PrefixOf(n) {
+		return 1
+	}
+
+	for i := 0; i < int(math.Min(float64(n.Size()), float64(other.Size()))); i++ {
+		if n.At(i).Type() < other.At(i).Type() {
+			return -1
+		} else if n.At(i).Type() > other.At(i).Type() {
+			return 1
+		} else if len(n.At(i).Value()) < len(other.At(i).Value()) {
+			return -1
+		} else if len(n.At(i).Value()) > len(other.At(i).Value()) {
+			return 1
+		} else if !bytes.Equal(n.At(i).Value(), other.At(i).Value()) {
+			// Do byte-by-byte comparison
+			nValue := n.At(i).Value()
+			otherValue := other.At(i).Value()
+			for j := 0; j < len(nValue); j++ {
+				if nValue[j] < otherValue[j] {
+					return -1
+				} else if nValue[j] > otherValue[j] {
+					return 1
+				}
+			}
+		}
+	}
+
+	// The only possibility left is that they exactly match.
+	return 0
+}
+
 // DeepCopy makes a deep copy of the name component.
 func (n *Name) DeepCopy() *Name {
 	newN := new(Name)
