@@ -114,13 +114,19 @@ func (b *Block) DeepCopy() *Block {
 		copyB.subelements = append(copyB.subelements, subelem.DeepCopy())
 	}
 	// Reset wire
-	copyB.wire = make([]byte, 0)
-	copyB.hasWire = false
+	copyB.wire = make([]byte, len(b.wire))
+	copy(copyB.wire, b.wire)
+	copyB.hasWire = b.hasWire
 	return &copyB
 }
 
 // Encode encodes all subelements into the block's value.
 func (b *Block) Encode() error {
+	if len(b.subelements) == 0 {
+		// Take no action, but is not an error
+		return nil
+	}
+
 	b.value = []byte{}
 	for _, elem := range b.subelements {
 		elemWire, err := elem.Wire()
@@ -317,7 +323,7 @@ func DecodeBlock(wire []byte) (*Block, uint64, error) {
 	copy(b.value, wire[tlvTypeLen+tlvLengthLen:uint64(tlvTypeLen)+uint64(tlvLengthLen)+tlvLength])
 
 	// Add wire
-	b.wire = make([]byte, len(wire))
+	b.wire = make([]byte, uint64(tlvTypeLen)+uint64(tlvLengthLen)+tlvLength)
 	copy(b.wire, wire)
 	b.hasWire = true
 

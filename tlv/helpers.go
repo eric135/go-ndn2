@@ -71,3 +71,14 @@ func EncodeNNIBlock(t uint32, v uint64) *Block {
 	b.SetValue(value)
 	return b
 }
+
+// DecodeNNIBlock decodes a non-negative integer value from a block.
+func DecodeNNIBlock(wire *Block) (uint64, error) {
+	if wire == nil {
+		return 0, util.ErrNonExistent
+	}
+	if len(wire.Value()) != 8 {
+		return 0, ErrBufferTooShort
+	}
+	return binary.BigEndian.Uint64(wire.Value()), nil
+}

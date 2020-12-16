@@ -19,7 +19,7 @@ func TestNameCreate(t *testing.T) {
 	n := NewName()
 	assert.NotNil(t, n)
 
-	encoded, err := n.Wire().Wire()
+	encoded, err := n.Encode().Wire()
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, encoded, []byte{0x07, 0x00})
 
@@ -73,17 +73,15 @@ func TestNameDecodeUnknownComponent(t *testing.T) {
 func TestNameComponents(t *testing.T) {
 	n := new(Name)
 
-	goComponent, err := NewGenericNameComponent([]byte("go"))
+	goComponent := NewGenericNameComponent([]byte("go"))
 	assert.NotNil(t, goComponent)
-	assert.NoError(t, err)
 	n.Append(goComponent)
 	assert.Equal(t, 1, n.Size())
 	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(0).Type())
 	assert.Equal(t, "go", n.At(0).String())
 
-	ndnComponent, err := NewGenericNameComponent([]byte("ndn"))
+	ndnComponent := NewGenericNameComponent([]byte("ndn"))
 	assert.NotNil(t, ndnComponent)
-	assert.NoError(t, err)
 	n.Append(ndnComponent)
 	assert.Equal(t, 2, n.Size())
 	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(0).Type())
@@ -101,10 +99,9 @@ func TestNameComponents(t *testing.T) {
 	assert.Equal(t, "go", n.At(2).String())
 
 	// Test replacing
-	segComponent, err := NewSegmentNameComponent(27)
+	segComponent := NewSegmentNameComponent(27)
 	assert.NotNil(t, segComponent)
-	assert.NoError(t, err)
-	n.Set(2, segComponent)
+	assert.NoError(t, n.Set(2, segComponent))
 	assert.Equal(t, 3, n.Size())
 	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(0).Type())
 	assert.Equal(t, "go", n.At(0).String())
@@ -113,14 +110,37 @@ func TestNameComponents(t *testing.T) {
 	assert.Equal(t, uint16(tlv.SegmentNameComponent), n.At(2).Type())
 	assert.Equal(t, "seg=27", n.At(2).String())
 
-	// Test removal
-	n.Erase(1)
-	assert.Equal(t, 2, n.Size())
-	assert.Nil(t, n.At(2))
+	// Test insertion at arbitrary index
+	assert.NoError(t, n.Insert(2, goComponent))
+	assert.Equal(t, 4, n.Size())
 	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(0).Type())
 	assert.Equal(t, "go", n.At(0).String())
-	assert.Equal(t, uint16(tlv.SegmentNameComponent), n.At(1).Type())
-	assert.Equal(t, "seg=27", n.At(1).String())
+	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(1).Type())
+	assert.Equal(t, "ndn", n.At(1).String())
+	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(2).Type())
+	assert.Equal(t, "go", n.At(2).String())
+	assert.Equal(t, uint16(tlv.SegmentNameComponent), n.At(3).Type())
+	assert.Equal(t, "seg=27", n.At(3).String())
+
+	// Test finding first name component of type
+	index, matching := n.Find(tlv.SegmentNameComponent)
+	assert.Equal(t, 3, index)
+	assert.NotNil(t, matching)
+	assert.Equal(t, uint16(tlv.SegmentNameComponent), matching.Type())
+	index, matching = n.Find(tlv.ImplicitSha256DigestComponent)
+	assert.Equal(t, -1, index)
+	assert.Nil(t, matching)
+
+	// Test removal
+	assert.NoError(t, n.Erase(1))
+	assert.Equal(t, 3, n.Size())
+	assert.Nil(t, n.At(3))
+	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(0).Type())
+	assert.Equal(t, "go", n.At(0).String())
+	assert.Equal(t, uint16(tlv.GenericNameComponent), n.At(1).Type())
+	assert.Equal(t, "go", n.At(1).String())
+	assert.Equal(t, uint16(tlv.SegmentNameComponent), n.At(2).Type())
+	assert.Equal(t, "seg=27", n.At(2).String())
 
 	// Test clearing
 	n.Clear()
@@ -165,9 +185,8 @@ func TestNameComparison(t *testing.T) {
 	assert.False(t, nNdnGo.Equals(n))
 
 	n1 := n.DeepCopy()
-	goComponent, err := NewGenericNameComponent([]byte("go"))
+	goComponent := NewGenericNameComponent([]byte("go"))
 	assert.NotNil(t, goComponent)
-	assert.NoError(t, err)
 	assert.NoError(t, n1.Set(1, goComponent))
 	assert.False(t, n.PrefixOf(n1))
 	assert.False(t, n1.PrefixOf(n))
@@ -180,18 +199,17 @@ func TestNameEncode(t *testing.T) {
 	assert.NotNil(t, n)
 	assert.NoError(t, err)
 	assert.True(t, n.HasWire())
-	b := n.Wire()
+	b := n.Encode()
 	wire, err := b.Wire()
 	assert.NoError(t, err)
 	assert.Equal(t, []byte{0x07, 0x13, 0x08, 0x02, 0x67, 0x6f, 0x08, 0x03, 0x6e, 0x64, 0x6e, 0x21, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA}, wire)
 
-	goComponent, err := NewGenericNameComponent([]byte("go"))
+	goComponent := NewGenericNameComponent([]byte("go"))
 	assert.NotNil(t, goComponent)
-	assert.NoError(t, err)
 	assert.NoError(t, n.Set(1, goComponent))
 	assert.False(t, n.HasWire())
 
-	b = n.Wire()
+	b = n.Encode()
 	assert.NotNil(t, b)
 	assert.True(t, n.HasWire())
 	wire, err = b.Wire()

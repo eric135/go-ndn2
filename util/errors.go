@@ -11,8 +11,9 @@ import "errors"
 
 // GoNDN2 errors.
 var (
-	ErrNonExistent = errors.New("Required value does not exist")
-	ErrOutOfRange  = errors.New("Value outside of allowed range")
-	ErrTooLong     = errors.New("Value too long")
-	ErrTooShort    = errors.New("Value too short")
+	ErrDecodeNameComponent = errors.New("Error decoding name component")
+	ErrNonExistent         = errors.New("Required value does not exist")
+	ErrOutOfRange          = errors.New("Value outside of allowed range")
+	ErrTooLong             = errors.New("Value too long")
+	ErrTooShort            = errors.New("Value too short")
 )

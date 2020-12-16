@@ -11,7 +11,8 @@ import "errors"
 
 // TLV errors.
 var (
-	ErrBufferTooShort = errors.New("TLV length exceeds buffer size")
-	ErrMissingLength  = errors.New("Missing TLV length")
-	ErrUnrecognized   = errors.New("Unrecognized TLV type")
+	ErrBufferTooShort       = errors.New("TLV length exceeds buffer size")
+	ErrMissingLength        = errors.New("Missing TLV length")
+	ErrUnexpected           = errors.New("Unexpected TLV type")
+	ErrUnrecognizedCritical = errors.New("Unrecognized critical TLV type")
 )

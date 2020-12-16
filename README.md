@@ -11,8 +11,9 @@ It is designed with forwarders in mind (particularly [YaNFD](https://github.com/
 
 ### Network Packets
 
+* Congestion marking (**planned**)
 * Data (**planned**)
-* Interest (**planned**)
+* Interest
 * Link Object (**planned**)
 * Names
 * Signatures (**planned**)

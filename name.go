@@ -11,8 +11,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/eric135/go-ndn2/tlv"
 	"github.com/eric135/go-ndn2/util"
@@ -24,7 +26,7 @@ type NameComponent interface {
 	DeepCopy() NameComponent
 	Type() uint16
 	Value() []byte
-	Wire() *tlv.Block
+	Encode() *tlv.Block
 }
 
 // DecodeNameComponent decodes a name component from the wire.
@@ -40,30 +42,34 @@ func DecodeNameComponent(wire *tlv.Block) (NameComponent, error) {
 	var err error
 	switch wire.Type() {
 	case tlv.ImplicitSha256DigestComponent:
-		n, err = NewImplicitSha256DigestComponent(wire.Value())
+		n = NewImplicitSha256DigestComponent(wire.Value())
 	case tlv.ParametersSha256DigestComponent:
-		n, err = NewParametersSha256DigestComponent(wire.Value())
+		n = NewParametersSha256DigestComponent(wire.Value())
 	case tlv.GenericNameComponent:
-		n, err = NewGenericNameComponent(wire.Value())
+		n = NewGenericNameComponent(wire.Value())
 	case tlv.KeywordNameComponent:
-		n, err = NewKeywordNameComponent(wire.Value())
+		n = NewKeywordNameComponent(wire.Value())
 	case tlv.SegmentNameComponent:
-		n, err = NewSegmentNameComponent(binary.BigEndian.Uint64(wire.Value()))
+		n = NewSegmentNameComponent(binary.BigEndian.Uint64(wire.Value()))
 	case tlv.ByteOffsetNameComponent:
-		n, err = NewByteOffsetNameComponent(binary.BigEndian.Uint64(wire.Value()))
+		n = NewByteOffsetNameComponent(binary.BigEndian.Uint64(wire.Value()))
 	case tlv.VersionNameComponent:
-		n, err = NewVersionNameComponent(binary.BigEndian.Uint64(wire.Value()))
+		n = NewVersionNameComponent(binary.BigEndian.Uint64(wire.Value()))
 	case tlv.TimestampNameComponent:
-		n, err = NewTimestampNameComponent(binary.BigEndian.Uint64(wire.Value()))
+		n = NewTimestampNameComponent(binary.BigEndian.Uint64(wire.Value()))
 	case tlv.SequenceNumNameComponent:
-		n, err = NewSequenceNumNameComponent(binary.BigEndian.Uint64(wire.Value()))
+		n = NewSequenceNumNameComponent(binary.BigEndian.Uint64(wire.Value()))
 	default:
 		if wire.Type() > math.MaxUint16 {
 			n = nil
 			err = util.ErrOutOfRange
 		} else {
-			n, err = NewBaseNameComponent(uint16(wire.Type()), wire.Value())
+			n = NewBaseNameComponent(uint16(wire.Type()), wire.Value())
 		}
+	}
+
+	if n == nil {
+		err = util.ErrDecodeNameComponent
 	}
 	return n, err
 }
@@ -80,16 +86,16 @@ type BaseNameComponent struct {
 }
 
 // NewBaseNameComponent creates a name component of an arbitrary type.
-func NewBaseNameComponent(tlvType uint16, value []byte) (*BaseNameComponent, error) {
+func NewBaseNameComponent(tlvType uint16, value []byte) *BaseNameComponent {
 	if len(value) == 0 {
-		return nil, util.ErrTooShort
+		return nil
 	}
 
 	n := new(BaseNameComponent)
 	n.tlvType = tlvType
 	n.value = make([]byte, len(value))
 	copy(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *BaseNameComponent) String() string {
@@ -115,10 +121,11 @@ func (n *BaseNameComponent) Value() []byte {
 	return n.value
 }
 
-// Wire encodes the name component into its wire encoding.
-func (n *BaseNameComponent) Wire() *tlv.Block {
-	if n.wire == nil || !n.wire.HasWire() {
+// Encode encodes the name component into a block.
+func (n *BaseNameComponent) Encode() *tlv.Block {
+	if n.wire == nil {
 		n.wire = tlv.NewBlock(uint32(n.tlvType), n.value)
+		n.wire.Wire()
 	}
 	return n.wire.DeepCopy()
 }
@@ -133,16 +140,16 @@ type ImplicitSha256DigestComponent struct {
 }
 
 // NewImplicitSha256DigestComponent creates a new ImplicitSha256DigestComponent.
-func NewImplicitSha256DigestComponent(value []byte) (*ImplicitSha256DigestComponent, error) {
+func NewImplicitSha256DigestComponent(value []byte) *ImplicitSha256DigestComponent {
 	if len(value) != 32 {
-		return nil, util.ErrTooShort
+		return nil
 	}
 
 	n := new(ImplicitSha256DigestComponent)
 	n.tlvType = tlv.ImplicitSha256DigestComponent
 	n.value = make([]byte, len(value))
 	copy(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *ImplicitSha256DigestComponent) String() string {
@@ -161,6 +168,7 @@ func (n *ImplicitSha256DigestComponent) SetValue(value []byte) error {
 	}
 	n.value = make([]byte, 32)
 	copy(n.value, value)
+	n.wire = nil
 	return nil
 }
 
@@ -174,16 +182,16 @@ type ParametersSha256DigestComponent struct {
 }
 
 // NewParametersSha256DigestComponent creates a new ParametersSha256DigestComponent.
-func NewParametersSha256DigestComponent(value []byte) (*ParametersSha256DigestComponent, error) {
+func NewParametersSha256DigestComponent(value []byte) *ParametersSha256DigestComponent {
 	if len(value) != 32 {
-		return nil, util.ErrTooShort
+		return nil
 	}
 
 	n := new(ParametersSha256DigestComponent)
 	n.tlvType = tlv.ParametersSha256DigestComponent
 	n.value = make([]byte, len(value))
 	copy(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *ParametersSha256DigestComponent) String() string {
@@ -202,6 +210,7 @@ func (n *ParametersSha256DigestComponent) SetValue(value []byte) error {
 	}
 	n.value = make([]byte, 32)
 	copy(n.value, value)
+	n.wire = nil
 	return nil
 }
 
@@ -215,16 +224,16 @@ type GenericNameComponent struct {
 }
 
 // NewGenericNameComponent creates a new GenericNameComponent.
-func NewGenericNameComponent(value []byte) (*GenericNameComponent, error) {
+func NewGenericNameComponent(value []byte) *GenericNameComponent {
 	if len(value) == 0 {
-		return nil, util.ErrTooShort
+		return nil
 	}
 
 	n := new(GenericNameComponent)
 	n.tlvType = tlv.GenericNameComponent
 	n.value = make([]byte, len(value))
 	copy(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *GenericNameComponent) String() string {
@@ -240,6 +249,7 @@ func (n *GenericNameComponent) DeepCopy() NameComponent {
 func (n *GenericNameComponent) SetValue(value []byte) {
 	n.value = make([]byte, len(value))
 	copy(n.value, value)
+	n.wire = nil
 }
 
 ///////////////////////
@@ -252,16 +262,16 @@ type KeywordNameComponent struct {
 }
 
 // NewKeywordNameComponent creates a new KeywordNameComponent.
-func NewKeywordNameComponent(value []byte) (*KeywordNameComponent, error) {
+func NewKeywordNameComponent(value []byte) *KeywordNameComponent {
 	if len(value) == 0 {
-		return nil, util.ErrTooShort
+		return nil
 	}
 
 	n := new(KeywordNameComponent)
 	n.tlvType = tlv.KeywordNameComponent
 	n.value = make([]byte, len(value))
 	copy(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *KeywordNameComponent) String() string {
@@ -277,6 +287,7 @@ func (n *KeywordNameComponent) DeepCopy() NameComponent {
 func (n *KeywordNameComponent) SetValue(value []byte) {
 	n.value = make([]byte, len(value))
 	copy(n.value, value)
+	n.wire = nil
 }
 
 ///////////////////////
@@ -289,12 +300,12 @@ type SegmentNameComponent struct {
 }
 
 // NewSegmentNameComponent creates a new SegmentNameComponent.
-func NewSegmentNameComponent(value uint64) (*SegmentNameComponent, error) {
+func NewSegmentNameComponent(value uint64) *SegmentNameComponent {
 	n := new(SegmentNameComponent)
 	n.tlvType = tlv.SegmentNameComponent
 	n.value = make([]byte, 8)
 	binary.BigEndian.PutUint64(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *SegmentNameComponent) String() string {
@@ -314,6 +325,7 @@ func (n *SegmentNameComponent) Encode() *tlv.Block {
 // SetValue sets the value of a KeywordNameComponent.
 func (n *SegmentNameComponent) SetValue(value uint64) {
 	binary.BigEndian.PutUint64(n.value, value)
+	n.wire = nil
 }
 
 //////////////////////////
@@ -326,12 +338,12 @@ type ByteOffsetNameComponent struct {
 }
 
 // NewByteOffsetNameComponent creates a new ByteOffsetNameComponent.
-func NewByteOffsetNameComponent(value uint64) (*ByteOffsetNameComponent, error) {
+func NewByteOffsetNameComponent(value uint64) *ByteOffsetNameComponent {
 	n := new(ByteOffsetNameComponent)
 	n.tlvType = tlv.ByteOffsetNameComponent
 	n.value = make([]byte, 8)
 	binary.BigEndian.PutUint64(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *ByteOffsetNameComponent) String() string {
@@ -351,6 +363,7 @@ func (n *ByteOffsetNameComponent) Encode() *tlv.Block {
 // SetValue sets the value of a ByteOffsetNameComponent.
 func (n *ByteOffsetNameComponent) SetValue(value uint64) {
 	binary.BigEndian.PutUint64(n.value, value)
+	n.wire = nil
 }
 
 ///////////////////////
@@ -363,12 +376,12 @@ type VersionNameComponent struct {
 }
 
 // NewVersionNameComponent creates a new VersionNameComponent.
-func NewVersionNameComponent(value uint64) (*VersionNameComponent, error) {
+func NewVersionNameComponent(value uint64) *VersionNameComponent {
 	n := new(VersionNameComponent)
 	n.tlvType = tlv.VersionNameComponent
 	n.value = make([]byte, 8)
 	binary.BigEndian.PutUint64(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *VersionNameComponent) String() string {
@@ -388,6 +401,7 @@ func (n *VersionNameComponent) Encode() *tlv.Block {
 // SetValue sets the value of a VersionNameComponent.
 func (n *VersionNameComponent) SetValue(value uint64) {
 	binary.BigEndian.PutUint64(n.value, value)
+	n.wire = nil
 }
 
 /////////////////////////
@@ -400,12 +414,12 @@ type TimestampNameComponent struct {
 }
 
 // NewTimestampNameComponent creates a new TimestampNameComponent.
-func NewTimestampNameComponent(value uint64) (*TimestampNameComponent, error) {
+func NewTimestampNameComponent(value uint64) *TimestampNameComponent {
 	n := new(TimestampNameComponent)
 	n.tlvType = tlv.TimestampNameComponent
 	n.value = make([]byte, 8)
 	binary.BigEndian.PutUint64(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *TimestampNameComponent) String() string {
@@ -425,6 +439,7 @@ func (n *TimestampNameComponent) Encode() *tlv.Block {
 // SetValue sets the value of a TimestampNameComponent.
 func (n *TimestampNameComponent) SetValue(value uint64) {
 	binary.BigEndian.PutUint64(n.value, value)
+	n.wire = nil
 }
 
 ///////////////////////////
@@ -437,12 +452,12 @@ type SequenceNumNameComponent struct {
 }
 
 // NewSequenceNumNameComponent creates a new SequenceNumNameComponent.
-func NewSequenceNumNameComponent(value uint64) (*SequenceNumNameComponent, error) {
+func NewSequenceNumNameComponent(value uint64) *SequenceNumNameComponent {
 	n := new(SequenceNumNameComponent)
 	n.tlvType = tlv.SequenceNumNameComponent
 	n.value = make([]byte, 8)
 	binary.BigEndian.PutUint64(n.value, value)
-	return n, nil
+	return n
 }
 
 func (n *SequenceNumNameComponent) String() string {
@@ -462,6 +477,7 @@ func (n *SequenceNumNameComponent) Encode() *tlv.Block {
 // SetValue sets the value of a SequenceNumNameComponent.
 func (n *SequenceNumNameComponent) SetValue(value uint64) {
 	binary.BigEndian.PutUint64(n.value, value)
+	n.wire = nil
 }
 
 ///////
@@ -471,13 +487,88 @@ func (n *SequenceNumNameComponent) SetValue(value uint64) {
 // Name represents an NDN name.
 type Name struct {
 	components []NameComponent
-	wire       tlv.Block
+	wire       *tlv.Block
 }
 
 // NewName constructs an empty name.
 func NewName() *Name {
 	n := new(Name)
 	return n
+}
+
+// NameFromString decodes a name from a string.
+func NameFromString(str string) (*Name, error) {
+	n := new(Name)
+
+	if len(str) == 0 {
+		// Empty name
+		return n, nil
+	}
+
+	components := strings.Split(str, "/")[1:] // Skip first since empty
+	for _, component := range components {
+		var c NameComponent
+		if strings.Contains(component, "=") {
+			componentSplit := strings.Split(component, "=")
+			if len(componentSplit) != 2 {
+				return nil, errors.New("Name component has extraneous =")
+			}
+			switch componentSplit[0] {
+			case "sha256digest":
+				digest, err := hex.DecodeString(componentSplit[1])
+				if err != nil {
+					return nil, errors.New("ImplicitSha256DigestComponent is not a hex string")
+				}
+				c = NewImplicitSha256DigestComponent(digest)
+			case "params-sha256":
+				digest, err := hex.DecodeString(componentSplit[1])
+				if err != nil {
+					return nil, errors.New("ParametersSha256DigestComponent is not a hex string")
+				}
+				c = NewParametersSha256DigestComponent(digest)
+			case "8":
+				c = NewGenericNameComponent([]byte(componentSplit[1]))
+			case "seg":
+				seg, err := strconv.ParseUint(componentSplit[1], 10, 64)
+				if err != nil {
+					return nil, errors.New("SegmentNameComponent is not a decimal string")
+				}
+				c = NewSegmentNameComponent(seg)
+			case "off":
+				off, err := strconv.ParseUint(componentSplit[1], 10, 64)
+				if err != nil {
+					return nil, errors.New("ByteOffsetNameComponent is not a decimal string")
+				}
+				c = NewByteOffsetNameComponent(off)
+			case "v":
+				v, err := strconv.ParseUint(componentSplit[1], 10, 64)
+				if err != nil {
+					return nil, errors.New("VersionNameComponent is not a decimal string")
+				}
+				c = NewByteOffsetNameComponent(v)
+			case "t":
+				t, err := strconv.ParseUint(componentSplit[1], 10, 64)
+				if err != nil {
+					return nil, errors.New("TimestampNameComponent is not a decimal string")
+				}
+				c = NewTimestampNameComponent(t)
+			case "seq":
+				seq, err := strconv.ParseUint(componentSplit[1], 10, 64)
+				if err != nil {
+					return nil, errors.New("SequenceNumNameComponent is not a decimal string")
+				}
+				c = NewSequenceNumNameComponent(seq)
+			default:
+				return nil, errors.New("Unknown name component " + componentSplit[0])
+			}
+		} else {
+			// Treat as GenericNameComponent
+			c = NewGenericNameComponent([]byte(component))
+		}
+		n.Append(c)
+	}
+
+	return n, nil
 }
 
 // DecodeName decodes a name from wire encoding.,
@@ -490,7 +581,7 @@ func DecodeName(b *tlv.Block) (*Name, error) {
 		return nil, err
 	}
 	if b.Type() != tlv.Name {
-		return nil, tlv.ErrUnrecognized
+		return nil, tlv.ErrUnexpected
 	}
 
 	n := new(Name)
@@ -502,7 +593,7 @@ func DecodeName(b *tlv.Block) (*Name, error) {
 		}
 		n.Append(component)
 	}
-	n.wire = *b.DeepCopy()
+	n.wire = b.DeepCopy()
 	n.wire.Wire()
 	return n, nil
 }
@@ -520,14 +611,10 @@ func (n *Name) String() string {
 }
 
 // Append adds the specified name component to the end of the name.
-func (n *Name) Append(component NameComponent) error {
-	if component == nil {
-		return util.ErrNonExistent
-	}
-	//n.components = append(n.components, reflect.New(reflect.ValueOf(component).Elem().Type()).Interface().(NameComponent))
+func (n *Name) Append(component NameComponent) *Name {
 	n.components = append(n.components, component.DeepCopy())
-	n.wire.Reset()
-	return nil
+	n.wire = nil
+	return n
 }
 
 // At returns the name component at the specified index. If out of range, nil is returned.
@@ -542,7 +629,7 @@ func (n *Name) At(index int) NameComponent {
 func (n *Name) Clear() {
 	if len(n.components) > 0 {
 		n.components = make([]NameComponent, 0)
-		n.wire.Reset()
+		n.wire = nil
 	}
 }
 
@@ -609,19 +696,42 @@ func (n *Name) Equals(other *Name) bool {
 }
 
 // Erase erases the specified name component. If out of range, no action is taken.
-func (n *Name) Erase(index int) {
+func (n *Name) Erase(index int) error {
 	if index < 0 || index >= len(n.components) {
-		return
+		return util.ErrOutOfRange
 	}
 
 	copy(n.components[index:], n.components[index+1:])
 	n.components = n.components[:len(n.components)-1]
-	n.wire.Reset()
+	n.wire = nil
+	return nil
+}
+
+// Find returns the first name component with the specified type, as well as its index.
+func (n *Name) Find(tlvType uint16) (int, NameComponent) {
+	for i, component := range n.components {
+		if component.Type() == tlvType {
+			return i, component
+		}
+	}
+
+	return -1, nil
 }
 
 // HasWire returns whether the name has a wire encoding.
 func (n *Name) HasWire() bool {
-	return n.wire.HasWire()
+	return n.wire != nil
+}
+
+// Insert inserts a name component at the specified index.
+func (n *Name) Insert(index int, component NameComponent) error {
+	if index < 0 || index >= n.Size() {
+		return util.ErrOutOfRange
+	}
+
+	n.components = append(n.components[:index], append([]NameComponent{component.DeepCopy()}, n.components[index:]...)...)
+	n.wire = nil
+	return nil
 }
 
 // Prefix returns a name prefix of the specified number of components. If greater than or equal to the size of the name, this returns a copy of the name.
@@ -634,7 +744,7 @@ func (n *Name) Prefix(size int) *Name {
 		prefix.components = append(prefix.components, n.components[i].DeepCopy())
 	}
 	// Reset wire
-	prefix.wire = tlv.Block{}
+	prefix.wire = new(tlv.Block)
 	return &prefix
 }
 
@@ -661,7 +771,7 @@ func (n *Name) Set(index int, component NameComponent) error {
 
 	//n.components[index] = reflect.New(reflect.ValueOf(component).Elem().Type()).Interface().(NameComponent)
 	n.components[index] = component.DeepCopy()
-	n.wire.Reset()
+	n.wire = nil
 	return nil
 }
 
@@ -670,14 +780,14 @@ func (n *Name) Size() int {
 	return len(n.components)
 }
 
-// Wire returns the wire encoding of the name.
-func (n *Name) Wire() *tlv.Block {
-	if !n.wire.HasWire() {
-		n.wire.Reset()
+// Encode encodes the name into a bock.
+func (n *Name) Encode() *tlv.Block {
+	if n.wire == nil {
+		n.wire = new(tlv.Block)
 		n.wire.SetType(tlv.Name)
 
 		for _, component := range n.components {
-			n.wire.Append(component.Wire())
+			n.wire.Append(component.Encode())
 		}
 
 		n.wire.Wire()
